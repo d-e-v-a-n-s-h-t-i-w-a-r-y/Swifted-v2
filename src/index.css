@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Light mode - warm, inviting palette */
+    --background: 40 30% 98%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 245 60% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 10% 94%;
+    --secondary-foreground: 240 10% 30%;
+
+    --muted: 240 8% 92%;
+    --muted-foreground: 240 5% 45%;
+
+    --accent: 175 50% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 10% 88%;
+    --input: 240 10% 88%;
+    --ring: 245 60% 55%;
+
+    --radius: 0.75rem;
+
+    /* Semantic color tokens for variety */
+    --success: 160 60% 40%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --info: 210 80% 55%;
+    --info-foreground: 0 0% 100%;
+    
+    --rose: 350 70% 55%;
+    --rose-foreground: 0 0% 100%;
+
+    /* Custom tokens */
+    --shadow-subtle: 0 2px 8px hsl(240 10% 10% / 0.06);
+    --shadow-medium: 0 4px 16px hsl(240 10% 10% / 0.08);
+  }
+
+  .dark {
+    --background: 240 15% 8%;
+    --foreground: 220 15% 95%;
+
+    --card: 240 12% 11%;
+    --card-foreground: 220 15% 95%;
+
+    --popover: 240 12% 11%;
+    --popover-foreground: 220 15% 95%;
+
+    --primary: 250 65% 65%;
+    --primary-foreground: 240 15% 8%;
+
+    --secondary: 240 10% 16%;
+    --secondary-foreground: 220 10% 80%;
+
+    --muted: 240 10% 14%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 175 55% 50%;
+    --accent-foreground: 240 15% 8%;
+
+    --destructive: 0 60% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 10% 18%;
+    --input: 240 10% 18%;
+    --ring: 250 65% 65%;
+
+    /* Dark mode semantic colors */
+    --success: 160 55% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 90% 55%;
+    --warning-foreground: 0 0% 100%;
+    
+    --info: 210 75% 60%;
+    --info-foreground: 0 0% 100%;
+    
+    --rose: 350 65% 60%;
+    --rose-foreground: 0 0% 100%;
+
+    /* Custom tokens */
+    --shadow-subtle: 0 2px 8px hsl(240 20% 4% / 0.4);
+    --shadow-medium: 0 4px 16px hsl(240 20% 4% / 0.5);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@layer components {
+  /* Example block for snippets */
+  .example-block {
+    @apply rounded-xl p-4 bg-accent/20 border border-accent/30;
+  }
+
+  /* Shake animation for wrong answers */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+  }
+
+  .animate-shake {
+    animation: shake 0.3s ease-in-out;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply h-1.5 rounded-full bg-secondary overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full bg-primary transition-all duration-500;
+  }
+}
