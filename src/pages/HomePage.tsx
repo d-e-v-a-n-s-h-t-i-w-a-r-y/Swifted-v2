@@ -1,13 +1,24 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronLeft, ChevronRight, HelpCircle, Lightbulb, Bookmark, Volume2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, HelpCircle, Lightbulb, Bookmark, Volume2, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import QuizModal from "@/components/learning/QuizModal";
 import { useBookmarks } from "@/hooks/useBookmarks";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { TextToSpeechControls } from "@/components/snippets/TextToSpeechControls";
 import { useStreaks } from "@/hooks/useStreaks";
+import { useStats } from "@/hooks/useStats";
 import { GlobalHeader } from "@/components/layout/GlobalHeader";
 import { getSnippets } from "@/services/supabaseService";
+import ReactMarkdown from "react-markdown";
+
+// Map DB topic names to display names
+const TOPIC_DISPLAY_NAMES: Record<string, string> = {
+  "Languages": "World",
+  "Language": "World",
+  "Communication": "World",
+  "Linguistics": "World",
+};
+const getTopicDisplayName = (topic: string) => TOPIC_DISPLAY_NAMES[topic] || topic;
 
 export default function HomePage() {
   const [snippets, setSnippets] = useState<any[]>([]);
@@ -20,6 +31,7 @@ export default function HomePage() {
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const tts = useTextToSpeech();
   const { recordQuizAttempt } = useStreaks();
+  const { addStats } = useStats();
 
   // Fetch snippets from Supabase
   useEffect(() => {
@@ -63,11 +75,7 @@ export default function HomePage() {
 
   const handleQuizComplete = (score: number) => {
     recordQuizAttempt("snippet");
-    const savedStats = localStorage.getItem("swifted-stats");
-    const stats = savedStats ? JSON.parse(savedStats) : { snippetsCompleted: 0, totalPoints: 0 };
-    stats.snippetsCompleted += 1;
-    stats.totalPoints += score;
-    localStorage.setItem("swifted-stats", JSON.stringify(stats));
+    addStats(1, score);
   };
 
   const handleQuizClose = () => setShowQuiz(false);
@@ -85,6 +93,7 @@ export default function HomePage() {
       image: snippet.image,
       content: snippet.content,
       example: snippet.example,
+      db_id: snippet.id,
     });
   };
 
@@ -93,7 +102,24 @@ export default function HomePage() {
   };
 
   const handleTTSPlay = () => {
-    const fullText = `${snippet.title}. ${snippet.content}`;
+    // Strip markdown formatting for clean speech
+    const stripMarkdown = (text: string) =>
+      text
+        .replace(/```[\s\S]*?```/g, '') // remove code blocks
+        .replace(/`([^`]+)`/g, '$1')    // inline code → just the text
+        .replace(/#{1,6}\s+/g, '')      // remove headings
+        .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+        .replace(/\*([^*]+)\*/g, '$1')  // italic
+        .replace(/__([^_]+)__/g, '$1')  // bold alt
+        .replace(/_([^_]+)_/g, '$1')    // italic alt
+        .replace(/^\s*[-*+]\s+/gm, '')  // bullet points
+        .replace(/^\s*\d+\.\s+/gm, '') // numbered lists
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '') // images
+        .replace(/\n{2,}/g, '. ')       // double newlines → pause
+        .replace(/\n/g, ' ')            // single newlines → space
+        .trim();
+    const fullText = `${snippet.title}. ${stripMarkdown(snippet.content)}`;
     tts.speak(fullText);
   };
 
@@ -151,7 +177,7 @@ export default function HomePage() {
 
               <div className="absolute bottom-4 left-4">
                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-background/80 text-primary backdrop-blur-sm border border-border/50">
-                  {snippet.topic}
+                  {getTopicDisplayName(snippet.topic)}
                 </span>
               </div>
             </div>
@@ -189,12 +215,8 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="mb-5 sm:mb-6">
-                {snippet.content.split('\n\n').map((paragraph: string, idx: number) => (
-                  <p key={idx} className="text-sm sm:text-[15px] font-medium text-secondary-foreground leading-relaxed mb-3 sm:mb-4">
-                    {paragraph}
-                  </p>
-                ))}
+              <div className="mb-5 sm:mb-6 prose prose-sm dark:prose-invert max-w-none prose-p:text-secondary-foreground prose-p:leading-relaxed prose-strong:text-foreground prose-headings:text-foreground prose-li:text-secondary-foreground">
+                <ReactMarkdown>{snippet.content}</ReactMarkdown>
               </div>
 
               <button
@@ -222,11 +244,18 @@ export default function HomePage() {
             <span className="hidden xs:inline">Previous</span>
           </button>
 
-          <div className="flex items-center gap-1">
-            {snippets.map((_, idx) => (
-              <div key={idx} className={cn("h-1.5 rounded-full transition-all", idx === currentIndex ? "bg-primary w-4 sm:w-5" : "bg-muted w-1.5")} />
-            ))}
-          </div>
+          <button
+            onClick={() => {
+              const shuffled = [...snippets].sort(() => Math.random() - 0.5);
+              setSnippets(shuffled);
+              setCurrentIndex(0);
+              if (scrollContainerRef.current) scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+            }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RefreshCw size={14} />
+            <span>Refresh Feed</span>
+          </button>
 
           <button
             onClick={goToNext}

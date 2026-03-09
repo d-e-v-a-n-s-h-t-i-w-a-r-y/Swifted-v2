@@ -2,6 +2,9 @@ import { useState } from "react";
 import { CheckCircle, XCircle, Trophy, ArrowRight, ArrowLeft, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Strip backticks from AI-generated text so they don't render as inline code
+const cleanText = (text: string) => text.replace(/`/g, '');
+
 interface Question {
   question: string;
   options: string[];
@@ -19,14 +22,14 @@ interface QuizModalProps {
   hasNextSnippet: boolean;
 }
 
-export default function QuizModal({ 
-  questions, 
-  snippetTitle, 
-  onComplete, 
-  onClose, 
+export default function QuizModal({
+  questions,
+  snippetTitle,
+  onComplete,
+  onClose,
   onReturnToSnippet,
   onNextSnippet,
-  hasNextSnippet 
+  hasNextSnippet
 }: QuizModalProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -41,10 +44,10 @@ export default function QuizModal({
 
   const handleAnswer = (index: number) => {
     if (isAnswered) return;
-    
+
     setSelectedAnswer(index);
     const correct = index === question.correctIndex;
-    
+
     if (correct) {
       setIsAnswered(true);
       setIsCorrect(true);
@@ -76,7 +79,7 @@ export default function QuizModal({
   if (isCompleted) {
     const maxScore = questions.length * 10;
     const percentage = Math.round((score / maxScore) * 100);
-    
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background animate-fade-in">
         <div className="w-full max-w-md mx-5 text-center">
@@ -138,9 +141,9 @@ export default function QuizModal({
         </div>
         {/* Progress bar */}
         <div className="progress-bar">
-          <div 
-            className="progress-fill" 
-            style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }} 
+          <div
+            className="progress-fill"
+            style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
           />
         </div>
       </div>
@@ -148,7 +151,7 @@ export default function QuizModal({
       {/* Question Content - Scrollable */}
       <div className="flex-1 overflow-y-auto px-5 py-6">
         <h2 className="text-xl font-semibold text-foreground leading-relaxed mb-6">
-          {question.question}
+          {cleanText(question.question)}
         </h2>
 
         {/* Options */}
@@ -157,7 +160,7 @@ export default function QuizModal({
             const isSelected = selectedAnswer === idx;
             const showCorrect = isAnswered && idx === question.correctIndex;
             const showWrong = isSelected && !isAnswered && !isCorrect;
-            
+
             return (
               <button
                 key={idx}
@@ -168,14 +171,14 @@ export default function QuizModal({
                   showCorrect
                     ? "bg-green-500/15 border-green-500 text-foreground"
                     : showWrong
-                    ? "bg-destructive/15 border-destructive text-foreground animate-shake"
-                    : isAnswered
-                    ? "bg-card/50 border-border/50 opacity-60"
-                    : "bg-card border-border hover:border-primary/50"
+                      ? "bg-destructive/15 border-destructive text-foreground animate-shake"
+                      : isAnswered
+                        ? "bg-card/50 border-border/50 opacity-60"
+                        : "bg-card border-border hover:border-primary/50"
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span>{option}</span>
+                  <span>{cleanText(option)}</span>
                   {showCorrect && (
                     <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
                   )}
@@ -213,8 +216,8 @@ export default function QuizModal({
       <div className="flex-shrink-0 px-5 py-5 bg-background border-t border-border/50">
         {isAnswered ? (
           <div className="space-y-3">
-            <button 
-              onClick={handleNext} 
+            <button
+              onClick={handleNext}
               className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors"
             >
               <span>{isLastQuestion ? "Finish Quiz" : "Next Question"}</span>

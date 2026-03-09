@@ -199,3 +199,35 @@ CREATE POLICY IF NOT EXISTS "Allow public read daily_content"
 CREATE POLICY IF NOT EXISTS "Allow service role write daily_content"
   ON public.daily_content FOR ALL USING (true);
 
+
+-- ============================================================
+-- USER TRACKING TABLES (Stats & Streaks)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.user_stats (
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE PRIMARY KEY,
+  snippets_completed INTEGER DEFAULT 0,
+  total_points INTEGER DEFAULT 0,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_streaks (
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE PRIMARY KEY,
+  current_streak INTEGER DEFAULT 0,
+  longest_streak INTEGER DEFAULT 0,
+  quizzes_today INTEGER DEFAULT 0,
+  streak_history JSONB DEFAULT '{}'::jsonb,
+  milestones JSONB DEFAULT '{"firstStreak":false,"firstRoadmapUnit":false}'::jsonb,
+  last_active_roadmap JSONB,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- RLS
+ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_streaks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own stats" ON public.user_stats 
+  FOR ALL USING (auth.uid() = user_id);
+  
+CREATE POLICY "Users can manage own streaks" ON public.user_streaks 
+  FOR ALL USING (auth.uid() = user_id);
+

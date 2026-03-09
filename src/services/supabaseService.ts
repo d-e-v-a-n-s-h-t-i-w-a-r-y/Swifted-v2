@@ -260,3 +260,100 @@ export async function getRoadmaps(): Promise<Roadmap[]> {
 
     return data || [];
 }
+
+// =========================================================================
+// USER TRACKING (Stats & Streaks)
+// =========================================================================
+
+export interface UserStats {
+    user_id: string;
+    snippets_completed: number;
+    total_points: number;
+}
+
+export interface UserStreaks {
+    user_id: string;
+    current_streak: number;
+    longest_streak: number;
+    quizzes_today: number;
+    streak_history: Record<string, number>;
+    milestones: { firstStreak: boolean; firstRoadmapUnit: boolean; };
+    last_active_roadmap: {
+        categoryId: string;
+        roadmapIndex: number;
+        unitIndex: number;
+        unitTitle: string;
+    } | null;
+}
+
+export async function getUserStats(userId: string): Promise<UserStats | null> {
+    const { data, error } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (error && error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Error fetching user stats:', error);
+    }
+    return data;
+}
+
+export async function updateUserStats(stats: UserStats): Promise<void> {
+    const { error } = await supabase
+        .from('user_stats')
+        .upsert({ ...stats, updated_at: new Date().toISOString() });
+
+    if (error) {
+        if (error.code === 'PGRST205') return; // Table doesn't exist yet — silently skip
+        console.error('Error updating user stats:', error);
+        throw error;
+    }
+}
+
+export async function getUserStreaks(userId: string): Promise<UserStreaks | null> {
+    const { data, error } = await supabase
+        .from('user_streaks')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (error && error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Error fetching user streaks:', error);
+    }
+
+    // Map column names to our local formats
+    if (data) {
+        return {
+            user_id: data.user_id,
+            current_streak: data.current_streak,
+            longest_streak: data.longest_streak,
+            quizzes_today: data.quizzes_today,
+            streak_history: data.streak_history,
+            milestones: data.milestones,
+            last_active_roadmap: data.last_active_roadmap
+        };
+    }
+    return null;
+}
+
+export async function updateUserStreaks(streaks: UserStreaks): Promise<void> {
+    const { error } = await supabase
+        .from('user_streaks')
+        .upsert({
+            user_id: streaks.user_id,
+            current_streak: streaks.current_streak,
+            longest_streak: streaks.longest_streak,
+            quizzes_today: streaks.quizzes_today,
+            streak_history: streaks.streak_history,
+            milestones: streaks.milestones,
+            last_active_roadmap: streaks.last_active_roadmap,
+            updated_at: new Date().toISOString()
+        });
+
+    if (error) {
+        if (error.code === 'PGRST205') return; // Table doesn't exist yet — silently skip
+        console.error('Error updating user streaks:', error);
+        throw error;
+    }
+}

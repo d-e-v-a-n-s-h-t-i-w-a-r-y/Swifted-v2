@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Brain, CheckCircle2, Unlock, Clock, Flame, Calendar, LogOut, Bookmark, ChevronRight, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -9,42 +9,31 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStreaks } from "@/hooks/useStreaks";
+import { useStats } from "@/hooks/useStats";
 import { GlobalHeader } from "@/components/layout/GlobalHeader";
 
 export default function ProfilePage() {
   const { user, isAuthenticated, logout } = useAuth();
   const { currentStreak, longestStreak, quizzesToday, quizGoal, dailyGoalComplete, progressPercentage } = useStreaks();
+  const { snippetsCompleted } = useStats();
 
-  const [stats, setStats] = useState({
-    conceptsLearned: 0,
-    understandingVerified: 0,
-    skillsUnlocked: 0,
-    timeInvested: 0,
-    clarityScore: 0,
-    activeDays: 0,
-  });
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<BookmarkedSnippet | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const { bookmarks, removeBookmark } = useBookmarks();
 
-  useEffect(() => {
-    const savedStats = localStorage.getItem("swifted-stats");
-    let parsedStats = { snippetsCompleted: 0, totalPoints: 0 };
-    if (savedStats) parsedStats = JSON.parse(savedStats);
-
-    const snippets = parsedStats.snippetsCompleted || 0;
-
-    setStats({
+  const stats = useMemo(() => {
+    const snippets = snippetsCompleted || 0;
+    return {
       conceptsLearned: snippets * 3,
       understandingVerified: Math.floor(snippets * 0.8),
       skillsUnlocked: Math.floor(snippets / 5),
       timeInvested: snippets * 4,
       clarityScore: snippets > 0 ? Math.min(95, 60 + snippets * 2) : 0,
       activeDays: Math.min(snippets, 14),
-    });
-  }, []);
+    };
+  }, [snippetsCompleted]);
 
   const handleLogout = () => {
     setShowLogoutConfirm(true);
