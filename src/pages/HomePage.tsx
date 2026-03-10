@@ -10,6 +10,7 @@ import { useStats } from "@/hooks/useStats";
 import { GlobalHeader } from "@/components/layout/GlobalHeader";
 import { getSnippets } from "@/services/supabaseService";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // Map DB topic names to display names
 const TOPIC_DISPLAY_NAMES: Record<string, string> = {
@@ -27,17 +28,20 @@ export default function HomePage() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showTTS, setShowTTS] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Track snippet IDs seen this session — viewed ones go to end on shuffle
+  const viewedIds = useRef<Set<string>>(new Set());
 
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const tts = useTextToSpeech();
   const { recordQuizAttempt } = useStreaks();
   const { addStats } = useStats();
 
-  // Fetch snippets from Supabase
+  // Fetch snippets from Supabase — always randomised on load
   useEffect(() => {
     getSnippets()
       .then((data) => {
         const mapped = data.map((s) => ({
+          id: s.id,        // ← needed for bookmark sync
           topic: s.topic,
           title: s.title,
           image: s.image_url || 'https://images.unsplash.com/photo-1501504905252-473c47e087f8?w=800&h=400&fit=crop',
@@ -52,7 +56,8 @@ export default function HomePage() {
             }))
             : [],
         }));
-        setSnippets(mapped);
+        // Shuffle immediately so feed always starts fresh & random
+        setSnippets(mapped.sort(() => Math.random() - 0.5));
       })
       .catch((err) => console.error('Failed to load snippets:', err))
       .finally(() => setIsLoading(false));
@@ -68,7 +73,11 @@ export default function HomePage() {
     }
     tts.stop();
     setShowTTS(false);
-  }, [currentIndex]);
+    // Mark current snippet as viewed
+    if (snippets[currentIndex]?.id) {
+      viewedIds.current.add(snippets[currentIndex].id);
+    }
+  }, [currentIndex, snippets]);
 
   const goToPrevious = () => setCurrentIndex((prev) => Math.max(0, prev - 1));
   const goToNext = () => setCurrentIndex((prev) => Math.min(snippets.length - 1, prev + 1));
@@ -215,8 +224,10 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="mb-5 sm:mb-6 prose prose-sm dark:prose-invert max-w-none prose-p:text-secondary-foreground prose-p:leading-relaxed prose-strong:text-foreground prose-headings:text-foreground prose-li:text-secondary-foreground">
-                <ReactMarkdown>{snippet.content}</ReactMarkdown>
+              <div className="mb-5 sm:mb-6 prose prose-base dark:prose-invert max-w-none prose-p:text-secondary-foreground prose-p:leading-relaxed prose-strong:text-foreground prose-headings:text-foreground prose-li:text-secondary-foreground">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {snippet.content.replace(/^    /gm, '')}
+                </ReactMarkdown>
               </div>
 
               <button
@@ -231,42 +242,48 @@ export default function HomePage() {
         </div>
 
         {/* Navigation Bar */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 bg-card/95 backdrop-blur-sm border-t border-border/50">
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-4 bg-card/95 backdrop-blur-sm border-t border-border/50">
           <button
             onClick={goToPrevious}
             disabled={currentIndex === 0}
             className={cn(
-              "flex items-center gap-1 sm:gap-2 text-sm font-semibold transition-all",
-              currentIndex === 0 ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-foreground"
+              "flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 border",
+              currentIndex === 0
+                ? "text-muted-foreground/30 border-border/30 cursor-not-allowed"
+                : "text-foreground border-border bg-card hover:bg-secondary hover:border-primary/40 active:scale-95 shadow-sm"
             )}
           >
-            <ChevronLeft size={18} />
-            <span className="hidden xs:inline">Previous</span>
+            <ChevronLeft size={16} />
+            <span>Prev</span>
           </button>
 
           <button
             onClick={() => {
-              const shuffled = [...snippets].sort(() => Math.random() - 0.5);
-              setSnippets(shuffled);
+              // Unviewed snippets shuffled first, viewed ones pushed to end
+              const unseen = snippets.filter(s => !viewedIds.current.has(s.id)).sort(() => Math.random() - 0.5);
+              const seen = snippets.filter(s => viewedIds.current.has(s.id)).sort(() => Math.random() - 0.5);
+              setSnippets([...unseen, ...seen]);
               setCurrentIndex(0);
               if (scrollContainerRef.current) scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
             }}
-            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary/80 to-primary text-primary-foreground hover:from-primary hover:to-primary/90 active:scale-95 transition-all duration-200 shadow-md shadow-primary/20"
           >
             <RefreshCw size={14} />
-            <span>Refresh Feed</span>
+            <span>Shuffle</span>
           </button>
 
           <button
             onClick={goToNext}
             disabled={currentIndex === snippets.length - 1}
             className={cn(
-              "flex items-center gap-1 sm:gap-2 text-sm font-semibold transition-all",
-              currentIndex === snippets.length - 1 ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-foreground"
+              "flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 border",
+              currentIndex === snippets.length - 1
+                ? "text-muted-foreground/30 border-border/30 cursor-not-allowed"
+                : "text-foreground border-border bg-card hover:bg-secondary hover:border-primary/40 active:scale-95 shadow-sm"
             )}
           >
-            <span className="hidden xs:inline">Next</span>
-            <ChevronRight size={18} />
+            <span>Next</span>
+            <ChevronRight size={16} />
           </button>
         </div>
       </div>

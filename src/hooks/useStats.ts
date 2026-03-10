@@ -64,7 +64,7 @@ export function useStats() {
 
         localStorage.setItem(STATS_KEY, JSON.stringify(stats));
 
-        if (user && (needsRemoteSync.current || stats.snippetsCompleted > 0 || stats.totalPoints > 0)) {
+        if (user && (needsRemoteSync.current || isLoaded)) {
             needsRemoteSync.current = false;
             const remotePayload: UserStats = {
                 user_id: user.id,

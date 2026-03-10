@@ -357,3 +357,44 @@ export async function updateUserStreaks(streaks: UserStreaks): Promise<void> {
         throw error;
     }
 }
+
+// =========================================================================
+// ROADMAP PROGRESS
+// =========================================================================
+
+/**
+ * Get the completed lesson indices for a user's roadmap
+ */
+export async function getRoadmapProgress(userId: string, roadmapId: string): Promise<number[]> {
+    const { data, error } = await supabase
+        .from('roadmap_progress')
+        .select('completed_units')
+        .eq('user_id', userId)
+        .eq('roadmap_id', roadmapId)
+        .maybeSingle();
+
+    if (error && error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Error fetching roadmap progress:', error);
+    }
+    return data?.completed_units ?? [];
+}
+
+/**
+ * Save the completed lesson indices for a user's roadmap
+ */
+export async function saveRoadmapProgress(userId: string, roadmapId: string, completedUnits: number[]): Promise<void> {
+    const { error } = await supabase
+        .from('roadmap_progress')
+        .upsert({
+            user_id: userId,
+            roadmap_id: roadmapId,
+            completed_units: completedUnits,
+            updated_at: new Date().toISOString(),
+        });
+
+    if (error) {
+        if (error.code === 'PGRST205') return;
+        console.error('Error saving roadmap progress:', error);
+        throw error;
+    }
+}

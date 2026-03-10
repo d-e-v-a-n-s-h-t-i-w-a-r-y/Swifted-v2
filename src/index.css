@@ -40,13 +40,13 @@
     /* Semantic color tokens for variety */
     --success: 160 60% 40%;
     --success-foreground: 0 0% 100%;
-    
+
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    
+
     --info: 210 80% 55%;
     --info-foreground: 0 0% 100%;
-    
+
     --rose: 350 70% 55%;
     --rose-foreground: 0 0% 100%;
 
@@ -87,13 +87,13 @@
     /* Dark mode semantic colors */
     --success: 160 55% 45%;
     --success-foreground: 0 0% 100%;
-    
+
     --warning: 38 90% 55%;
     --warning-foreground: 0 0% 100%;
-    
+
     --info: 210 75% 60%;
     --info-foreground: 0 0% 100%;
-    
+
     --rose: 350 65% 60%;
     --rose-foreground: 0 0% 100%;
 
@@ -126,6 +126,7 @@
 }
 
 @layer components {
+
   /* Example block for snippets */
   .example-block {
     @apply rounded-xl p-4 bg-accent/20 border border-accent/30;
@@ -133,9 +134,19 @@
 
   /* Shake animation for wrong answers */
   @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
+
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+
+    25% {
+      transform: translateX(-5px);
+    }
+
+    75% {
+      transform: translateX(5px);
+    }
   }
 
   .animate-shake {

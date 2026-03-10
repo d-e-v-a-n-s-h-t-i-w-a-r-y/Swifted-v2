@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ArrowLeft, Beaker, Cpu, DollarSign, Globe, Heart, Lightbulb, ChevronRight, ChevronLeft, Search, Loader2, BookMarked, CheckCircle2, XCircle, Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/GlobalHeader";
-import { getRoadmaps } from "@/services/supabaseService";
+import { getRoadmaps, getRoadmapProgress, saveRoadmapProgress } from "@/services/supabaseService";
 import QuizModal from "@/components/learning/QuizModal";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -37,45 +38,93 @@ export default function RoadmapsPage() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [completedLessons, setCompletedLessonsRaw] = useState<Set<number>>(new Set());
 
-  // Persist completed lessons to localStorage per user + roadmap
-  const getStorageKey = (roadmapId: string) => `swifted_roadmap_progress_${user?.id || 'guest'}_${roadmapId}`;
-
-  const setCompletedLessons = (updater: Set<number> | ((prev: Set<number>) => Set<number>)) => {
-    setCompletedLessonsRaw(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (selectedRoadmap?.id) {
-        localStorage.setItem(getStorageKey(selectedRoadmap.id), JSON.stringify([...next]));
-      }
-      return next;
-    });
-  };
-
-  // Load progress when selecting a roadmap
+  // Load progress when selecting a roadmap — from Supabase if logged in, localStorage as fallback
   useEffect(() => {
-    if (selectedRoadmap?.id) {
-      try {
-        const saved = localStorage.getItem(getStorageKey(selectedRoadmap.id));
-        if (saved) {
-          setCompletedLessonsRaw(new Set(JSON.parse(saved)));
-        } else {
-          setCompletedLessonsRaw(new Set());
+    if (!selectedRoadmap?.id) return;
+
+    const localKey = `swifted_roadmap_progress_${user?.id || 'guest'}_${selectedRoadmap.id}`;
+
+    async function loadProgress() {
+      if (user) {
+        try {
+          const remoteUnits = await getRoadmapProgress(user.id, selectedRoadmap.id);
+          setCompletedLessonsRaw(new Set(remoteUnits));
+          // Also keep localStorage in sync for offline fallback
+          localStorage.setItem(localKey, JSON.stringify(remoteUnits));
+          return;
+        } catch (e) {
+          console.error('Failed to load remote roadmap progress, falling back to localStorage', e);
         }
+      }
+      // Guest or remote failed: use localStorage
+      try {
+        const saved = localStorage.getItem(localKey);
+        setCompletedLessonsRaw(saved ? new Set(JSON.parse(saved)) : new Set());
       } catch {
         setCompletedLessonsRaw(new Set());
       }
     }
+
+    loadProgress();
   }, [selectedRoadmap?.id, user?.id]);
+
+  // Save helper — writes to both localStorage and Supabase
+  const setCompletedLessons = (updater: Set<number> | ((prev: Set<number>) => Set<number>)) => {
+    setCompletedLessonsRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (selectedRoadmap?.id) {
+        const localKey = `swifted_roadmap_progress_${user?.id || 'guest'}_${selectedRoadmap.id}`;
+        const arr = [...next];
+        localStorage.setItem(localKey, JSON.stringify(arr));
+        // Also update the allRoadmapProgress map so list view stays in sync
+        setAllRoadmapProgress(prev => ({ ...prev, [selectedRoadmap.id]: arr }));
+        if (user) {
+          saveRoadmapProgress(user.id, selectedRoadmap.id, arr).catch(e =>
+            console.error('Failed to sync roadmap progress to Supabase', e)
+          );
+        }
+      }
+      return next;
+    });
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [mainSearchQuery, setMainSearchQuery] = useState("");
   const [dbRoadmaps, setDbRoadmaps] = useState<any[]>([]);
+  // Progress for ALL roadmaps (for the list view cards)
+  const [allRoadmapProgress, setAllRoadmapProgress] = useState<Record<string, number[]>>({});
 
   const [isLoading, setIsLoading] = useState(true);
 
+  // Load roadmaps + progress for every roadmap at once
   useEffect(() => {
-    getRoadmaps().catch(() => []).then((roads) => {
+    getRoadmaps().catch(() => []).then(async (roads) => {
       setDbRoadmaps(roads);
+      // Load progress for each roadmap
+      if (user && roads.length > 0) {
+        const progressMap: Record<string, number[]> = {};
+        await Promise.all(
+          roads.map(async (r: any) => {
+            try {
+              const units = await getRoadmapProgress(user.id, r.id);
+              progressMap[r.id] = units;
+            } catch { /* ignore */ }
+          })
+        );
+        setAllRoadmapProgress(progressMap);
+      } else {
+        // Guest: load from localStorage
+        const progressMap: Record<string, number[]> = {};
+        for (const r of roads) {
+          const key = `swifted_roadmap_progress_${user?.id || 'guest'}_${r.id}`;
+          try {
+            const saved = localStorage.getItem(key);
+            if (saved) progressMap[r.id] = JSON.parse(saved);
+          } catch { /* ignore */ }
+        }
+        setAllRoadmapProgress(progressMap);
+      }
     }).finally(() => setIsLoading(false));
-  }, []);
+  }, [user]);
 
   const selectedCategory = CATEGORIES.find(c => c.id === selectedCategoryId);
 
@@ -173,8 +222,10 @@ export default function RoadmapsPage() {
 
         {/* Lesson body */}
         {lesson?.body && (
-          <div className="prose prose-sm prose-invert max-w-none mb-8 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-6 [&_h3]:mb-3 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-foreground [&_p]:text-secondary-foreground [&_p]:leading-relaxed [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_li]:text-secondary-foreground [&_strong]:text-foreground [&_code]:bg-primary/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_pre]:bg-secondary/30 [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0">
-            <ReactMarkdown>{lesson.body}</ReactMarkdown>
+          <div className="prose prose-base prose-invert max-w-none mb-8 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-6 [&_h3]:mb-3 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-foreground [&_p]:text-secondary-foreground [&_p]:leading-relaxed [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_li]:text-secondary-foreground [&_strong]:text-foreground [&_code]:bg-primary/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_pre]:bg-secondary/30 [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {lesson.body.replace(/^    /gm, '')}
+            </ReactMarkdown>
           </div>
         )}
 
@@ -416,7 +467,8 @@ export default function RoadmapsPage() {
             ) : (
               filteredCategoryData.roadmaps.map((roadmap) => {
                 const lessonsCount = roadmap.units.length;
-                const progress = lessonsCount > 0 ? (completedLessons.size / lessonsCount) * 100 : 0;
+                const savedProgress = allRoadmapProgress[roadmap.id] || [];
+                const progress = lessonsCount > 0 ? (savedProgress.length / lessonsCount) * 100 : 0;
                 return (
                   <Card
                     key={roadmap.id}
@@ -447,7 +499,7 @@ export default function RoadmapsPage() {
                           className="shrink-0 h-8 px-4 text-xs font-medium"
                           onClick={(e) => { e.stopPropagation(); setSelectedRoadmap(roadmap); }}
                         >
-                          Start
+                          {savedProgress.length > 0 ? 'Continue' : 'Start'}
                         </Button>
                       </div>
                     </CardContent>
