@@ -45,24 +45,63 @@ export default function RoadmapsPage() {
     const localKey = `swifted_roadmap_progress_${user?.id || 'guest'}_${selectedRoadmap.id}`;
 
     async function loadProgress() {
+      let localUnits: number[] = [];
+      const guestKey = `swifted_roadmap_progress_guest_${selectedRoadmap.id}`;
+      const legacyKey = `swifted_roadmap_progress_${selectedRoadmap.id}`; // From older versions
+      
+      try {
+        const saved = localStorage.getItem(localKey);
+        if (saved) {
+          localUnits = JSON.parse(saved);
+        } else if (user) {
+          // Fallback to guest progress if newly logged in
+          const guestSaved = localStorage.getItem(guestKey) || localStorage.getItem(legacyKey);
+          if (guestSaved) {
+            localUnits = JSON.parse(guestSaved);
+            localStorage.setItem(localKey, guestSaved); // migrate
+            localStorage.removeItem(guestKey);
+            localStorage.removeItem(legacyKey); // Prevent infinite re-migration to other users
+          }
+        } else {
+          // If guest, try legacy key
+          const legacySaved = localStorage.getItem(legacyKey);
+          if (legacySaved) {
+            localUnits = JSON.parse(legacySaved);
+            localStorage.setItem(localKey, legacySaved); // migrate to guest key
+            localStorage.removeItem(legacyKey); // clear old legacy
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse local roadmap progress', e);
+      }
+
       if (user) {
         try {
           const remoteUnits = await getRoadmapProgress(user.id, selectedRoadmap.id);
-          setCompletedLessonsRaw(new Set(remoteUnits));
-          // Also keep localStorage in sync for offline fallback
-          localStorage.setItem(localKey, JSON.stringify(remoteUnits));
+          
+          // Merge local and remote
+          const mergedSet = new Set([...remoteUnits, ...localUnits]);
+          const mergedArr = Array.from(mergedSet).sort((a,b) => a-b);
+          
+          setCompletedLessonsRaw(mergedSet);
+          
+          // Keep local fresh
+          localStorage.setItem(localKey, JSON.stringify(mergedArr));
+          
+          // Sync UP to Supabase if local had more progress than remote (e.g. migrating guest data or offline progress)
+          if (mergedArr.length > remoteUnits.length) {
+            saveRoadmapProgress(user.id, selectedRoadmap.id, mergedArr).catch(e => 
+              console.error('Failed to sync merged progress to Supabase', e)
+            );
+          }
           return;
         } catch (e) {
           console.error('Failed to load remote roadmap progress, falling back to localStorage', e);
         }
       }
-      // Guest or remote failed: use localStorage
-      try {
-        const saved = localStorage.getItem(localKey);
-        setCompletedLessonsRaw(saved ? new Set(JSON.parse(saved)) : new Set());
-      } catch {
-        setCompletedLessonsRaw(new Set());
-      }
+      
+      // Guest or remote failed: use local
+      setCompletedLessonsRaw(new Set(localUnits));
     }
 
     loadProgress();
@@ -100,29 +139,56 @@ export default function RoadmapsPage() {
     getRoadmaps().catch(() => []).then(async (roads) => {
       setDbRoadmaps(roads);
       // Load progress for each roadmap
-      if (user && roads.length > 0) {
-        const progressMap: Record<string, number[]> = {};
-        await Promise.all(
-          roads.map(async (r: any) => {
-            try {
-              const units = await getRoadmapProgress(user.id, r.id);
-              progressMap[r.id] = units;
-            } catch { /* ignore */ }
-          })
-        );
-        setAllRoadmapProgress(progressMap);
-      } else {
-        // Guest: load from localStorage
-        const progressMap: Record<string, number[]> = {};
-        for (const r of roads) {
-          const key = `swifted_roadmap_progress_${user?.id || 'guest'}_${r.id}`;
+      const progressMap: Record<string, number[]> = {};
+      
+      await Promise.all(
+        roads.map(async (r: any) => {
+          let localUnits: number[] = [];
+          const localKey = `swifted_roadmap_progress_${user?.id || 'guest'}_${r.id}`;
+          const guestKey = `swifted_roadmap_progress_guest_${r.id}`;
+          const legacyKey = `swifted_roadmap_progress_${r.id}`;
+          
           try {
-            const saved = localStorage.getItem(key);
-            if (saved) progressMap[r.id] = JSON.parse(saved);
+            const saved = localStorage.getItem(localKey);
+            if (saved) {
+              localUnits = JSON.parse(saved);
+            } else if (user) {
+              const guestSaved = localStorage.getItem(guestKey) || localStorage.getItem(legacyKey);
+              if (guestSaved) {
+                localUnits = JSON.parse(guestSaved);
+                localStorage.setItem(localKey, guestSaved);
+                localStorage.removeItem(guestKey);
+                localStorage.removeItem(legacyKey);
+              }
+            } else {
+              const legacySaved = localStorage.getItem(legacyKey);
+              if (legacySaved) {
+                localUnits = JSON.parse(legacySaved);
+                localStorage.setItem(localKey, legacySaved);
+                localStorage.removeItem(legacyKey); // clear old legacy
+              }
+            }
           } catch { /* ignore */ }
-        }
-        setAllRoadmapProgress(progressMap);
-      }
+
+          if (user) {
+            try {
+              const remoteUnits = await getRoadmapProgress(user.id, r.id);
+              const mergedSet = new Set([...remoteUnits, ...localUnits]);
+              const mergedArr = Array.from(mergedSet).sort((a, b) => a - b);
+              progressMap[r.id] = mergedArr;
+              
+              if (mergedArr.length > remoteUnits.length) {
+                saveRoadmapProgress(user.id, r.id, mergedArr).catch(() => {});
+              }
+            } catch {
+              progressMap[r.id] = localUnits;
+            }
+          } else {
+             progressMap[r.id] = localUnits;
+          }
+        })
+      );
+      setAllRoadmapProgress(progressMap);
     }).finally(() => setIsLoading(false));
   }, [user]);
 

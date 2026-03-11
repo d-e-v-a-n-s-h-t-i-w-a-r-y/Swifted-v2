@@ -23,8 +23,7 @@ interface StreakData {
   };
 }
 
-const STREAKS_KEY = "swifted-streaks";
-
+// Remove static STREAKS_KEY so we can isolate data per user
 const defaultStreakData: StreakData = {
   currentStreak: 0,
   longestStreak: 0,
@@ -45,22 +44,62 @@ export function useStreaks() {
   // 1. Initial Load (Remote if logged in, Local if not)
   useEffect(() => {
     async function loadData() {
-      // Always load local data first as fallback/baseline
-      const stored = localStorage.getItem(STREAKS_KEY);
+      const userKey = `swifted-streaks-${user?.id || 'guest'}`;
+      const guestKey = `swifted-streaks-guest`;
+      const legacyKey = `swifted-streaks`;
+
       let localData = { ...defaultStreakData };
 
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<StreakData>;
-        const today = format(new Date(), "yyyy-MM-dd");
-        const history = parsed.streakHistory || {};
-        const todayCount = history[today] || 0;
-        localData = {
-          ...defaultStreakData,
-          ...parsed,
-          milestones: { ...defaultStreakData.milestones, ...(parsed.milestones || {}) },
-          streakHistory: history,
-          quizzesToday: todayCount,
-        };
+      // 1. Try to load local data
+      try {
+        const saved = localStorage.getItem(userKey);
+        if (saved) {
+          const parsed = JSON.parse(saved) as Partial<StreakData>;
+          const today = format(new Date(), "yyyy-MM-dd");
+          const history = parsed.streakHistory || {};
+          const todayCount = history[today] || 0;
+          localData = {
+            ...defaultStreakData,
+            ...parsed,
+            milestones: { ...defaultStreakData.milestones, ...(parsed.milestones || {}) },
+            streakHistory: history,
+            quizzesToday: todayCount,
+          };
+        } else if (user) {
+          // Newly logged in: migrate guest or legacy progress
+          const guestSaved = localStorage.getItem(guestKey) || localStorage.getItem(legacyKey);
+          if (guestSaved) {
+            const parsed = JSON.parse(guestSaved) as Partial<StreakData>;
+            const today = format(new Date(), "yyyy-MM-dd");
+            localData = {
+              ...defaultStreakData,
+              ...parsed,
+              milestones: { ...defaultStreakData.milestones, ...(parsed.milestones || {}) },
+              streakHistory: parsed.streakHistory || {},
+              quizzesToday: (parsed.streakHistory || {})[today] || 0,
+            };
+            localStorage.setItem(userKey, guestSaved); // migrate
+            localStorage.removeItem(guestKey);
+            localStorage.removeItem(legacyKey); // clear so next user doesn't get it
+          }
+        } else {
+          // Guest: check legacy
+          const legacySaved = localStorage.getItem(legacyKey);
+          if (legacySaved) {
+            const parsed = JSON.parse(legacySaved) as Partial<StreakData>;
+            const today = format(new Date(), "yyyy-MM-dd");
+            localData = {
+              ...defaultStreakData,
+              ...parsed,
+              milestones: { ...defaultStreakData.milestones, ...(parsed.milestones || {}) },
+              streakHistory: parsed.streakHistory || {},
+              quizzesToday: (parsed.streakHistory || {})[today] || 0,
+            };
+            localStorage.setItem(userKey, legacySaved);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse local streaks", e);
       }
 
       if (user) {
@@ -73,13 +112,35 @@ export function useStreaks() {
             const history = remoteData.streak_history || {};
             const todayCount = history[today] || 0;
 
+            // Merge logic: local data might have offline progress.
+            // A simple merge: if local quizzesToday > remote quizzesToday for today, we prioritize local.
+            const mergedHistory = { ...history };
+            let mergedQuizzesToday = todayCount;
+            let mergedCurrentStreak = remoteData.current_streak;
+            let mergedLongestStreak = remoteData.longest_streak;
+            let mergedMilestones = remoteData.milestones || { firstStreak: false, firstRoadmapUnit: false };
+            let mergedLastRoadmap = remoteData.last_active_roadmap;
+
+            // If local data has a higher quiz count for today, it means they played offline or we just migrated guest data
+            const localTodayCount = localData.streakHistory[today] || 0;
+            if (localTodayCount > todayCount) {
+              mergedHistory[today] = localTodayCount;
+              mergedQuizzesToday = localTodayCount;
+              // We could recalculate streak here but keeping it simple for now as currentStreak from local gets preserved below if we sync up
+              mergedCurrentStreak = Math.max(remoteData.current_streak, localData.currentStreak);
+              mergedLongestStreak = Math.max(remoteData.longest_streak, localData.longestStreak);
+              mergedMilestones = { ...mergedMilestones, ...localData.milestones };
+              mergedLastRoadmap = localData.lastActiveRoadmap || mergedLastRoadmap;
+              needsRemoteSync.current = true; // Sync merged progress UP
+            }
+
             setStreakData({
-              currentStreak: remoteData.current_streak,
-              longestStreak: remoteData.longest_streak,
-              quizzesToday: todayCount,
-              streakHistory: history,
-              lastActiveRoadmap: remoteData.last_active_roadmap,
-              milestones: remoteData.milestones || { firstStreak: false, firstRoadmapUnit: false }
+              currentStreak: mergedCurrentStreak,
+              longestStreak: mergedLongestStreak,
+              quizzesToday: mergedQuizzesToday,
+              streakHistory: mergedHistory,
+              lastActiveRoadmap: mergedLastRoadmap,
+              milestones: mergedMilestones
             });
             setIsLoaded(true);
             return;
@@ -105,7 +166,8 @@ export function useStreaks() {
     if (!isLoaded) return;
 
     // Always save to local storage as fallback
-    localStorage.setItem(STREAKS_KEY, JSON.stringify(streakData));
+    const userKey = `swifted-streaks-${user?.id || 'guest'}`;
+    localStorage.setItem(userKey, JSON.stringify(streakData));
 
     // If logged in, sync to Supabase (debounce this in a real app if called frequently)
     if (user && (needsRemoteSync.current || Object.keys(streakData.streakHistory).length > 0)) {

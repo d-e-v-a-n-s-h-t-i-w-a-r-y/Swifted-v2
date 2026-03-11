@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserStats, updateUserStats, UserStats } from "@/services/supabaseService";
 
-const STATS_KEY = "swifted-stats";
-
+// Remove the static STATS_KEY constraint so we can use dynamic keys per user
 export interface StatsData {
     snippetsCompleted: number;
     totalPoints: number;
@@ -22,29 +21,63 @@ export function useStats() {
 
     useEffect(() => {
         async function loadData() {
-            // Load local data first
+            const userKey = `swifted-stats-${user?.id || 'guest'}`;
+            const guestKey = `swifted-stats-guest`;
+            const legacyKey = `swifted-stats`;
+            
             let localData = { ...defaultStats };
-            const saved = localStorage.getItem(STATS_KEY);
-            if (saved) {
-                try {
+
+            // 1. Try to load local data
+            try {
+                const saved = localStorage.getItem(userKey);
+                if (saved) {
                     localData = { ...defaultStats, ...JSON.parse(saved) };
-                } catch (e) {
-                    console.error("Failed to parse stats", e);
+                } else if (user) {
+                    // Newly logged in: migrate guest or legacy progress
+                    const guestSaved = localStorage.getItem(guestKey) || localStorage.getItem(legacyKey);
+                    if (guestSaved) {
+                        localData = { ...defaultStats, ...JSON.parse(guestSaved) };
+                        localStorage.setItem(userKey, guestSaved);
+                        // Optional: Clear legacy/guest to prevent reuse by another account?
+                        // We'll leave them for now in case they logout, but if we want strict security we'd clear them.
+                        localStorage.removeItem(guestKey);
+                        localStorage.removeItem(legacyKey);
+                    }
+                } else {
+                    // Guest: check legacy
+                    const legacySaved = localStorage.getItem(legacyKey);
+                    if (legacySaved) {
+                        localData = { ...defaultStats, ...JSON.parse(legacySaved) };
+                        localStorage.setItem(userKey, legacySaved);
+                    }
                 }
+            } catch (e) {
+                console.error("Failed to parse local stats", e);
             }
 
+            // 2. Load remote if authenticated
             if (user) {
                 try {
                     const remoteData = await getUserStats(user.id);
                     if (remoteData) {
+                        // Merge logic: Take the max of local vs remote points/snippets to ensure no data loss
+                        const mergedSnippets = Math.max(localData.snippetsCompleted, remoteData.snippets_completed);
+                        const mergedPoints = Math.max(localData.totalPoints, remoteData.total_points);
+                        
                         setStats({
-                            snippetsCompleted: remoteData.snippets_completed,
-                            totalPoints: remoteData.total_points,
+                            snippetsCompleted: mergedSnippets,
+                            totalPoints: mergedPoints,
                         });
+                        
+                        // If local was higher (e.g. they did work offline or we migrated guest data), sync UP
+                        if (mergedSnippets > remoteData.snippets_completed || mergedPoints > remoteData.total_points) {
+                             needsRemoteSync.current = true;
+                        }
+                        
                         setIsLoaded(true);
                         return;
                     } else {
-                        // No remote data yet, sync local data up
+                        // No remote data yet (new user), sync local data up
                         needsRemoteSync.current = true;
                     }
                 } catch (e) {
@@ -62,7 +95,8 @@ export function useStats() {
     useEffect(() => {
         if (!isLoaded) return;
 
-        localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+        const userKey = `swifted-stats-${user?.id || 'guest'}`;
+        localStorage.setItem(userKey, JSON.stringify(stats));
 
         if (user && (needsRemoteSync.current || isLoaded)) {
             needsRemoteSync.current = false;

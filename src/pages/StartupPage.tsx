@@ -14,10 +14,6 @@ export default function StartupPage({ onStart }: StartupPageProps) {
     onStart();
   };
 
-  const handleSkip = () => {
-    onStart();
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-accent/20 flex flex-col items-center justify-center p-6">
       <div className="text-center space-y-8 max-w-md w-full">
@@ -55,13 +51,6 @@ export default function StartupPage({ onStart }: StartupPageProps) {
             )}
             {isLoading ? "Signing in…" : "Continue with Google"}
           </Button>
-
-          <button
-            onClick={handleSkip}
-            className="w-full py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Continue without signing in
-          </button>
         </div>
 
         <p className="text-xs text-muted-foreground/70 pt-2">
