@@ -191,8 +191,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Content */}
-            <div className="px-4 sm:px-5 pt-4 pb-6">
+            {/* Content - with extra bottom padding so it doesn't hide behind the fixed nav bar */}
+            <div className="px-4 sm:px-5 pt-4 pb-24">
               <h1 className="text-xl sm:text-2xl font-semibold text-foreground leading-tight mb-4 sm:mb-6">
                 {snippet.title}
               </h1>
@@ -241,8 +241,8 @@ export default function HomePage() {
           </article>
         </div>
 
-        {/* Navigation Bar — pinned above bottom tabs */}
-        <div className="shrink-0 flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-4 bg-card/95 backdrop-blur-sm border-t border-border/50">
+        {/* Navigation Bar — strictly pinned above bottom tabs (h-16) */}
+        <div className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-4 bg-card/95 backdrop-blur-md border-t border-border/50">
           <button
             onClick={goToPrevious}
             disabled={currentIndex === 0}
