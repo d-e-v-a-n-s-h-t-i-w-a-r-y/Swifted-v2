@@ -241,8 +241,8 @@ export default function HomePage() {
           </article>
         </div>
 
-        {/* Navigation Bar */}
-        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-4 bg-card/95 backdrop-blur-sm border-t border-border/50">
+        {/* Navigation Bar — pinned above bottom tabs */}
+        <div className="shrink-0 flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-4 bg-card/95 backdrop-blur-sm border-t border-border/50">
           <button
             onClick={goToPrevious}
             disabled={currentIndex === 0}
