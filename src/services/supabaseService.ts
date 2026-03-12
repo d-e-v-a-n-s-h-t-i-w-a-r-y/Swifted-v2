@@ -63,18 +63,37 @@ export interface Roadmap {
  * Fetch all snippets from the database
  */
 export async function getSnippets(): Promise<Snippet[]> {
-    const { data, error } = await supabase
-        .from('snippets')
-        .select('*')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
+    let allData: Snippet[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) {
+    try {
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('snippets')
+                .select('*')
+                .eq('status', 'published')
+                .order('created_at', { ascending: false })
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                page++;
+                if (data.length < pageSize) {
+                    hasMore = false;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+        return allData;
+    } catch (error) {
         console.error('Error fetching snippets:', error);
         throw error;
     }
-
-    return data || [];
 }
 
 /**

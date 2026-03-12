@@ -123,12 +123,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     localStorage.removeItem(STARTUP_SHOWN_KEY);
-    setState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      needsName: false,
-    });
+    
+    // Force a hard reload on logout to completely flush all React state 
+    // (useStats, useStreaks, Roadmaps) from memory. We skip setting `user: null`
+    // here because React would synchronously re-render the components as a "guest"
+    // before the reload hits, accidentally saving User A's data as guest data!
+    window.location.reload();
   }, []);
 
   return (

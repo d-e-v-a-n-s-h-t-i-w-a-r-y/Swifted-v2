@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, HelpCircle, Lightbulb, Bookmark, Volume2, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import QuizModal from "@/components/learning/QuizModal";
@@ -36,11 +37,17 @@ export default function HomePage() {
   const { recordQuizAttempt } = useStreaks();
   const { addStats } = useStats();
 
+  const { data: fetchedSnippets, isLoading: isQueryLoading } = useQuery({
+    queryKey: ['snippets'],
+    queryFn: getSnippets,
+    staleTime: 1000 * 60 * 60, // Cache for 1 hour
+    gcTime: 1000 * 60 * 60 * 24, // Keep in memory for 24 hours
+  });
+
   // Fetch snippets from Supabase — always randomised on load
   useEffect(() => {
-    getSnippets()
-      .then((data) => {
-        const mapped = data.map((s) => ({
+    if (fetchedSnippets) {
+        const mapped = fetchedSnippets.map((s) => ({
           id: s.id,        // ← needed for bookmark sync
           topic: s.topic,
           title: s.title,
@@ -58,10 +65,11 @@ export default function HomePage() {
         }));
         // Shuffle immediately so feed always starts fresh & random
         setSnippets(mapped.sort(() => Math.random() - 0.5));
-      })
-      .catch((err) => console.error('Failed to load snippets:', err))
-      .finally(() => setIsLoading(false));
-  }, []);
+        setIsLoading(false);
+    } else if (!isQueryLoading) {
+        setIsLoading(false);
+    }
+  }, [fetchedSnippets, isQueryLoading]);
 
   const snippet = snippets[currentIndex];
   const hasNextSnippet = currentIndex < snippets.length - 1;

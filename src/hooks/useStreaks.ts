@@ -170,7 +170,7 @@ export function useStreaks() {
     localStorage.setItem(userKey, JSON.stringify(streakData));
 
     // If logged in, sync to Supabase (debounce this in a real app if called frequently)
-    if (user && (needsRemoteSync.current || Object.keys(streakData.streakHistory).length > 0)) {
+    if (user?.id && needsRemoteSync.current) {
       needsRemoteSync.current = false;
       const remotePayload: UserStreaks = {
         user_id: user.id,
@@ -216,6 +216,7 @@ export function useStreaks() {
 
   const recordQuizAttempt = useCallback(
     (source: "daily" | "roadmap" | "snippet" = "snippet") => {
+      needsRemoteSync.current = true;
       setStreakData((prev) => {
         const today = format(new Date(), "yyyy-MM-dd");
         const prevCount = prev.streakHistory[today] || 0;
@@ -257,6 +258,7 @@ export function useStreaks() {
   );
 
   const recordRoadmapUnitComplete = useCallback(() => {
+    needsRemoteSync.current = true;
     setStreakData((prev) => {
       if (!prev.milestones.firstRoadmapUnit) {
         toast("Progress unlocked 🎯", {
@@ -272,6 +274,7 @@ export function useStreaks() {
 
   const updateLastActiveRoadmap = useCallback(
     (categoryId: string, roadmapIndex: number, unitIndex: number, unitTitle: string) => {
+      needsRemoteSync.current = true;
       setStreakData((prev) => ({
         ...prev,
         lastActiveRoadmap: { categoryId, roadmapIndex, unitIndex, unitTitle },

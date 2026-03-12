@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft, Beaker, Cpu, DollarSign, Globe, Heart, Lightbulb, ChevronRight, ChevronLeft, Search, Loader2, BookMarked, CheckCircle2, XCircle, Lock } from "lucide-react";
@@ -134,15 +135,26 @@ export default function RoadmapsPage() {
 
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load roadmaps + progress for every roadmap at once
+  // Cache heavy roadmaps payload (large text/JSON) for 1 hour to prevent huge egress spikes
+  const { data: fetchedRoadmaps } = useQuery({
+    queryKey: ['roadmaps'],
+    queryFn: getRoadmaps,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
+
+  // Load progress for every roadmap
   useEffect(() => {
-    getRoadmaps().catch(() => []).then(async (roads) => {
-      setDbRoadmaps(roads);
+    if (!fetchedRoadmaps) return;
+    
+    setDbRoadmaps(fetchedRoadmaps);
+    
+    async function loadAllProgress() {
       // Load progress for each roadmap
       const progressMap: Record<string, number[]> = {};
       
       await Promise.all(
-        roads.map(async (r: any) => {
+        fetchedRoadmaps!.map(async (r: any) => {
           let localUnits: number[] = [];
           const localKey = `swifted_roadmap_progress_${user?.id || 'guest'}_${r.id}`;
           const guestKey = `swifted_roadmap_progress_guest_${r.id}`;
@@ -189,8 +201,11 @@ export default function RoadmapsPage() {
         })
       );
       setAllRoadmapProgress(progressMap);
-    }).finally(() => setIsLoading(false));
-  }, [user]);
+      setIsLoading(false);
+    }
+    
+    loadAllProgress();
+  }, [fetchedRoadmaps, user]);
 
   const selectedCategory = CATEGORIES.find(c => c.id === selectedCategoryId);
 

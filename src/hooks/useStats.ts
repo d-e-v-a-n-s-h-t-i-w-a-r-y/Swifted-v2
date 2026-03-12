@@ -98,7 +98,7 @@ export function useStats() {
         const userKey = `swifted-stats-${user?.id || 'guest'}`;
         localStorage.setItem(userKey, JSON.stringify(stats));
 
-        if (user && (needsRemoteSync.current || isLoaded)) {
+        if (user?.id && needsRemoteSync.current) {
             needsRemoteSync.current = false;
             const remotePayload: UserStats = {
                 user_id: user.id,
@@ -113,6 +113,7 @@ export function useStats() {
     }, [stats, isLoaded, user]);
 
     const addStats = useCallback((snippetsToAdd: number, pointsToAdd: number) => {
+        needsRemoteSync.current = true;
         setStats(prev => ({
             snippetsCompleted: prev.snippetsCompleted + snippetsToAdd,
             totalPoints: prev.totalPoints + pointsToAdd,
