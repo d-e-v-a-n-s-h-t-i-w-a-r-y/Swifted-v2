@@ -25,7 +25,7 @@ export default function StartupPage({ onStart }: StartupPageProps) {
 
         <div className="space-y-4">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Swifted
+            SwiftEd – Learn Skills Faster with Micro-Learning
           </h1>
           <p className="text-xl sm:text-2xl font-medium text-muted-foreground leading-relaxed">
             Turn Doomscrolling into Learning Bits
@@ -56,6 +56,18 @@ export default function StartupPage({ onStart }: StartupPageProps) {
         <p className="text-xs text-muted-foreground/70 pt-2">
           Sign in to sync your progress across devices
         </p>
+
+        {/* SEO Semantic Sections */}
+        <div className="mt-10 text-left space-y-6 w-full max-w-md mx-auto opacity-90">
+          <section>
+            <h2 className="text-lg font-semibold text-foreground">The Best Micro Learning Platform</h2>
+            <p className="text-sm text-muted-foreground mt-1">Join SwiftEd to ditch long, tedious lectures. Enjoy short structured courses designed to help you absorb knowledge in just minutes.</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-semibold text-foreground">Learn Faster Every Day</h2>
+            <p className="text-sm text-muted-foreground mt-1">Whether on a commute or a coffee break, our bite-sized approach helps you learn faster and retain technical skills without the burnout.</p>
+          </section>
+        </div>
       </div>
     </div>
   );
